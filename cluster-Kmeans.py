@@ -140,7 +140,9 @@ def main():
     print("Done Kmean number analysis")
 # Based on the above graph, you will find the optimal number of clusters.
 # Clustering and collecting typical geometries
-    N_cluster_opt=5
+    N_cluster_opt = 5
+# Define the number of clusters whose indexes will be printed.
+    N_return_clusters = 20
     clusters_xyz, clusters_xyz_center, cluster_centers, clusters, labels = clustering(N_cluster_opt,[dataset_std],traj)
     avg_traj = md.Trajectory(np.array(clusters_xyz_center),traj_topo)
     avg_traj.save_pdb("./AlleyCat-Ca-unconstrained/cluster_center.pdb")
@@ -172,15 +174,18 @@ def main():
     for i in range(0,N_cluster_opt):
         Distance_square=pow((projection_allpoints[i][:, 0]-projection_centers[i][0]),2)+pow((projection_allpoints[i][:, 1]-projection_centers[i][1]),2)
         Distance=pow(Distance_square,0.5)
-        Label_minidx.append(np.argmin(Distance))
+        Label_minidx.append(np.argsort(Distance)[0:N_return_clusters])
     file_clus = open("./AlleyCat-Ca-unconstrained/nearest_clusters.dat",'w')
     for i in range(0,N_cluster_opt):
-        N_counter=0
-        for j in range(0,len(labels)):
-            if labels[j] == i and N_counter == Label_minidx[i]:
-                file_clus.write("Cluster "+str(i)+" is centered on snapshot: "+str(j+1)+"\n")
-                break
-            elif labels[j] == i and N_counter != Label_minidx[i]: N_counter=N_counter+1
+        A=np.sort(Label_minidx[i])
+        B=np.argsort(Label_minidx[i])
+        for k in range(0, len(Label_minidx[i])):
+            N_counter = 0
+            for j in range(0,len(labels)):
+                if labels[j] == i and N_counter == A[k]:
+                    file_clus.write("Cluster "+str(i)+" has snapshot: "+str(j+1)+" that ranks "+str(B[k]+1)+" closest to the center\n")
+                    break
+                elif labels[j] == i and N_counter != A[k]: N_counter=N_counter+1
     file_clus.close()
     plt.figure()
     se = ['gray', 'darksalmon', 'tan', 'palegreen', 'deepskyblue', 'plum', 'lemonchiffon', 'thistle',
