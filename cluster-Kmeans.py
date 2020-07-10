@@ -131,7 +131,7 @@ def rePDB(N_cluster_opt):
 
 def main():
     Max_clusters=10
-    Traj_interval=20
+    Traj_interval=1
     traj_origin = md.load_netcdf('./AlleyCat-Ca-unconstrained/constprun3.mdcrd',top='./AlleyCat-Ca-unconstrained/AlleyCat_model1.prmtop')
     traj1=traj_origin[::Traj_interval]
     atomid = traj1.topology.select('resid 1 to 92')
