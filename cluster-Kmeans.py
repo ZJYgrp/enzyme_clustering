@@ -7,6 +7,7 @@ from sklearn.pipeline import Pipeline
 from sklearn import metrics
 from msmbuilder.cluster import KMeans
 from itertools import combinations
+from sklearn.model_selection import learning_curve, GridSearchCV
 from scipy.spatial import distance
 import seaborn as sns
 import numpy as np
@@ -47,11 +48,28 @@ def dataset_CA_distances(traj):
     dataset.append(md.compute_distances(traj_subset, atom_pairs=comb))
     return dataset
 
-def dataset_phi(traj):
+def dataset_phi_psi_omega(traj):
     dataset = []
-    indices,angles = md.compute_phi(traj)
+    indices,angles1 = md.compute_phi(traj)
+    indices,angles2 = md.compute_psi(traj)
+    indices,angles3 = md.compute_omega(traj)
+    angles = np.concatenate((angles1,angles2,angles3), axis=1)
     dataset.append(angles)
     print("Done constructing dataset using Phi angles")
+    return dataset
+
+def dataset_chi(traj):
+    dataset = []
+    indices,angles1 = md.compute_chi1(traj)
+    indices,angles2 = md.compute_chi2(traj)
+    indices,angles3 = md.compute_chi3(traj)
+    #indices,angles4 = md.compute_chi4(traj)
+    #print(angles1)
+    #print(type(angles1))
+    #print(len(angles1))
+    angles = np.concatenate((angles1,angles2,angles3), axis=1)
+    dataset.append(angles)
+    print("Done constructing dataset using chi angles")
     return dataset
 
 def dataset_contacts(traj):
@@ -112,8 +130,8 @@ def rePDB(N_cluster_opt):
     return 1
 
 def main():
-    Max_clusters=2
-    Traj_interval=1
+    Max_clusters=10
+    Traj_interval=20
     traj_origin = md.load_netcdf('./AlleyCat-Ca-unconstrained/constprun3.mdcrd',top='./AlleyCat-Ca-unconstrained/AlleyCat_model1.prmtop')
     traj1=traj_origin[::Traj_interval]
     atomid = traj1.topology.select('resid 1 to 92')
@@ -125,7 +143,7 @@ def main():
     del traj_origin, traj1, traj_pre
 # dataset can be built by using different types of matrics. Here we used distance
     #dataset=dataset_CA_distances(traj)
-    dataset = dataset_contacts(traj)
+    dataset = dataset_phi_psi_omega(traj)
     scale1 = StandardScaler(copy=True, with_mean=True, with_std=True)
     dataset_std = scale1.fit_transform(dataset[0])
     #dataset = dataset_phi(traj)
@@ -140,13 +158,15 @@ def main():
     print("Done Kmean number analysis")
 # Based on the above graph, you will find the optimal number of clusters.
 # Clustering and collecting typical geometries
-    N_cluster_opt = 5
+    N_cluster_opt = 6
 # Define the number of clusters whose indexes will be printed.
     N_return_clusters = 20
     clusters_xyz, clusters_xyz_center, cluster_centers, clusters, labels = clustering(N_cluster_opt,[dataset_std],traj)
     avg_traj = md.Trajectory(np.array(clusters_xyz_center),traj_topo)
     avg_traj.save_pdb("./AlleyCat-Ca-unconstrained/cluster_center.pdb")
-    dataset_center = dataset_contacts(avg_traj)
+    dataset_center = dataset_phi_psi_omega(avg_traj)
+    avg_traj.save_pdb("./cluster_center.pdb")
+    dataset_center = dataset_phi_psi_omega(avg_traj)
     scale2 = StandardScaler(copy=True, with_mean=True, with_std=True)
     scale2.scale_ = scale1.scale_
     scale2.mean_ = scale1.mean_
