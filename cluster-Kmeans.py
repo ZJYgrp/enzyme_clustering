@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import colorConverter
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
 from sklearn import metrics
+from sklearn import preprocessing
 from msmbuilder.cluster import KMeans
 from itertools import combinations
 from sklearn.model_selection import learning_curve, GridSearchCV
@@ -12,11 +12,35 @@ from scipy.spatial import distance
 import seaborn as sns
 import numpy as np
 
+def ssr_sst_ratio(X, labels):
+    """adapted from the Calinski and Harabasz score.
+    """
+    le = preprocessing.LabelEncoder()
+    labels = le.fit_transform(labels)
+
+    n_samples, _ = X.shape
+    n_labels = len(le.classes_)
+
+    extra_disp, intra_disp = 0., 0.
+    mean = np.mean(X, axis=0)
+    for k in range(n_labels):
+        cluster_k = X[labels == k]
+        mean_k = np.mean(cluster_k, axis=0)
+        extra_disp += len(cluster_k) * np.sum((mean_k - mean) ** 2)
+        intra_disp += np.sum((cluster_k - mean_k) ** 2)
+
+    return (1. if intra_disp == 0. else
+            extra_disp / (intra_disp+extra_disp))
+
 def Kmeans_score(dataset, Max_clusters):
     print("Start to analyze the dependence of inertia on the number of clusters\n")
-    scores_in = []
-    scores_sc = []
-    scores_ch = []
+    scores_in = [] #the elbow indicates the good cluster number
+    scores_sc = [] #s=b-a/max(a,b) a: The mean distance between a sample and all other points in the same class,
+    # b: The mean distance between a sample and all other points in the next nearest cluster.
+    scores_ch = [] # Variance Ratio Criterion, tightness of the cluster
+    scores_rt = [] # Variance ratio, As the ratio inherently rises with cluster count,
+    # one looks for an “elbow” in the curve where adding another cluster does not add much new information, as done in a scree test
+    scores_db = [] # Values closer to zero indicate a better partition. sum of cluster i and j diameter over the distance between cluster centroids i and j. smaller the better.
     for i in range(Max_clusters - 2):
         kmeans_model = KMeans(n_clusters=i+2, init='k-means++', n_init=10, max_iter=300, tol=0.001,
                      precompute_distances='auto', verbose=0, random_state=None,
@@ -25,8 +49,10 @@ def Kmeans_score(dataset, Max_clusters):
         scores_in.append(kmeans_model.inertia_)
         scores_sc.append(metrics.silhouette_score(dataset[0], labels[0], metric='euclidean'))
         scores_ch.append(metrics.calinski_harabaz_score(dataset[0], labels[0]))
+        scores_rt.append(ssr_sst_ratio(dataset[0], labels[0]))
+        scores_db.append(metrics.davies_bouldin_score(dataset[0], labels[0]))
     print("Done generating scores for "+str(Max_clusters)+" clusters\n")
-    return scores_in, scores_sc, scores_ch
+    return scores_in, scores_sc, scores_ch, scores_rt, scores_db
 
 def Plot_scores(Max_clusters,scores_in,name):
     plt.subplots()
@@ -130,8 +156,8 @@ def rePDB(N_cluster_opt):
     return 1
 
 def main():
-    Max_clusters=10
-    Traj_interval=1
+    Max_clusters=19
+    Traj_interval=5
     traj_origin = md.load_netcdf('./AlleyCat-Ca-unconstrained/constprun3.mdcrd',top='./AlleyCat-Ca-unconstrained/AlleyCat_model1.prmtop')
     traj1=traj_origin[::Traj_interval]
     atomid = traj1.topology.select('resid 1 to 92')
@@ -148,13 +174,15 @@ def main():
     dataset_std = scale1.fit_transform(dataset[0])
     #dataset = dataset_phi(traj)
     # score functions loop over different number of Kmeans and then print corresponding inertia
-    scores_in, scores_sc, scores_ch = Kmeans_score([dataset_std], Max_clusters)
+    scores_in, scores_sc, scores_ch, scores_rt, scores_db = Kmeans_score([dataset_std], Max_clusters)
     #print(scores)
     #FST = np.gradient(scores)
     # Start clustering: Kmeans. n_jobs could be changed to allow parallel computing.
     Plot_scores(Max_clusters,scores_in,"inertia")
     Plot_scores(Max_clusters,scores_sc,"silhouette_coef")
     Plot_scores(Max_clusters,scores_ch,"calinski_harabasz")
+    Plot_scores(Max_clusters,scores_rt, "ssr_sst_ratio")
+    Plot_scores(Max_clusters, scores_db, "Davies-Bouldin Index")
     print("Done Kmean number analysis")
 # Based on the above graph, you will find the optimal number of clusters.
 # Clustering and collecting typical geometries
