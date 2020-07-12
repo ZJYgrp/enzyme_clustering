@@ -60,7 +60,7 @@ def Plot_scores(Max_clusters,scores_in,name):
     plt.xlabel('Number of clusters')
     plt.ylabel(name)
     plt.title("Inertia of k-Means versus number of clusters")
-    plt.savefig('./AlleyCat-Ca-unconstrained/'+name+'.pdf', dpi=300)
+    plt.savefig('./AlleyCat-Ca-constrained/'+name+'.pdf', dpi=300)
     print("Done plotting for "+name)
     return 1
 
@@ -116,14 +116,14 @@ def clustering(N_cluster_opt,dataset,traj):
     clusters = [[] for i in range(0, N_cluster_opt)]
     clusters_xyz = [[] for i in range(0, N_cluster_opt)]
     clusters_xyz_center = []
-    fileout_labels=open("./AlleyCat-Ca-unconstrained/Labels_for_"+str(N_cluster_opt)+"_clusters.dat",'w')
+    fileout_labels=open("./AlleyCat-Ca-constrained/Labels_for_"+str(N_cluster_opt)+"_clusters.dat",'w')
     for i in range(0, len(cluster.labels_[0])):
         fileout_labels.write("snapshot "+str(i+1)+" corresponds to Cluster "+str(cluster.labels_[0][i]+1)+"\n")
         for j in range(0, N_cluster_opt):
             if cluster.labels_[0][i] == j:
                 clusters[j].append(dataset[0][i])
                 clusters_xyz[j].append(traj[i].xyz)
-    fileout=open("./AlleyCat-Ca-unconstrained/population_for_"+str(N_cluster_opt)+"_clusters.dat",'w')
+    fileout=open("./AlleyCat-Ca-constrained/population_for_"+str(N_cluster_opt)+"_clusters.dat",'w')
     for l in range(0, N_cluster_opt):
         clusters_xyz_center.append(np.average(np.array(clusters_xyz[l]), axis=0)[0])
         fileout.write('The population of cluster ' + str(l) + ' is ' + str(len(clusters[l]))+'\n')
@@ -133,11 +133,11 @@ def clustering(N_cluster_opt,dataset,traj):
     return clusters_xyz,clusters_xyz_center,cluster_centers,clusters, cluster.labels_[0]
 
 def rePDB(N_cluster_opt):
-    file1 = open("./AlleyCat-Ca-unconstrained/population_for_"+str(N_cluster_opt)+"_clusters.dat", 'r')
+    file1 = open("./AlleyCat-Ca-constrained/population_for_"+str(N_cluster_opt)+"_clusters.dat", 'r')
     file1_lines = file1.readlines()
     population = np.array([int(file1_lines[i].split()[6]) for i in range(len(file1_lines))])
     index = np.argsort(population)[::-1]
-    file2 = open("./AlleyCat-Ca-unconstrained/cluster_center.pdb",'r')
+    file2 = open("./AlleyCat-Ca-constrained/cluster_center.pdb",'r')
     file2_lines = file2.readlines()
     length=0
     for k in range(len(file2_lines)):
@@ -145,8 +145,8 @@ def rePDB(N_cluster_opt):
             print("Frame length is "+str(k+1))
             length = k+1
             break
-    file1_re = open("./AlleyCat-Ca-unconstrained/population_sorted.dat",'w')
-    file2_re = open("./AlleyCat-Ca-unconstrained/cluster_center_sorted.pdb",'w')
+    file1_re = open("./AlleyCat-Ca-constrained/population_sorted.dat",'w')
+    file2_re = open("./AlleyCat-Ca-constrained/cluster_center_sorted.pdb",'w')
     for i in index:
         file1_re.write(file1_lines[i])
         for j in range(length):
@@ -156,11 +156,11 @@ def rePDB(N_cluster_opt):
     return 1
 
 def main():
-    Max_clusters=19
-    Traj_interval=5
-    traj_origin = md.load_netcdf('./AlleyCat-Ca-unconstrained/constprun3.mdcrd',top='./AlleyCat-Ca-unconstrained/AlleyCat_model1.prmtop')
+    Max_clusters=30
+    Traj_interval=20
+    traj_origin = md.load_netcdf('./AlleyCat-Ca-constrained/model-total.nc',top='./AlleyCat-Ca-constrained/model-total.prmtop')
     traj1=traj_origin[::Traj_interval]
-    atomid = traj1.topology.select('resid 1 to 92')
+    atomid = traj1.topology.select('resid 1 to 94')
     #atomid = traj1.topology.select("(resid 1 to 789 and backbone) or (resid 0)")
     #atomid = traj1.topology.select("(resid 0 152 160 277 278 326 334 339 340 434 436 450 643 645 765)")
     traj_pre = traj1.atom_slice(atomid)
@@ -169,10 +169,11 @@ def main():
     del traj_origin, traj1, traj_pre
 # dataset can be built by using different types of matrics. Here we used distance
     #dataset=dataset_CA_distances(traj)
-    dataset = dataset_phi_psi_omega(traj)
+    dataset=dataset_contacts(traj)
+    #dataset=dataset_chi(traj)
+    #dataset = dataset_phi_psi_omega(traj)
     scale1 = StandardScaler(copy=True, with_mean=True, with_std=True)
     dataset_std = scale1.fit_transform(dataset[0])
-    #dataset = dataset_phi(traj)
     # score functions loop over different number of Kmeans and then print corresponding inertia
     scores_in, scores_sc, scores_ch, scores_rt, scores_db = Kmeans_score([dataset_std], Max_clusters)
     #print(scores)
@@ -186,15 +187,17 @@ def main():
     print("Done Kmean number analysis")
 # Based on the above graph, you will find the optimal number of clusters.
 # Clustering and collecting typical geometries
-    N_cluster_opt = 6
+    N_cluster_opt = 20
 # Define the number of clusters whose indexes will be printed.
-    N_return_clusters = 20
+    N_return_clusters = 5
     clusters_xyz, clusters_xyz_center, cluster_centers, clusters, labels = clustering(N_cluster_opt,[dataset_std],traj)
     avg_traj = md.Trajectory(np.array(clusters_xyz_center),traj_topo)
-    avg_traj.save_pdb("./AlleyCat-Ca-unconstrained/cluster_center.pdb")
-    dataset_center = dataset_phi_psi_omega(avg_traj)
+    avg_traj.save_pdb("./AlleyCat-Ca-constrained/cluster_center.pdb")
     avg_traj.save_pdb("./cluster_center.pdb")
-    dataset_center = dataset_phi_psi_omega(avg_traj)
+    #dataset_center=dataset_CA_distances(avg_traj)
+    dataset_center=dataset_contacts(avg_traj)
+    #dataset_center=dataset_chi(avg_traj)
+    #dataset_center = dataset_phi_psi_omega(avg_traj)
     scale2 = StandardScaler(copy=True, with_mean=True, with_std=True)
     scale2.scale_ = scale1.scale_
     scale2.mean_ = scale1.mean_
@@ -223,7 +226,7 @@ def main():
         Distance_square=pow((projection_allpoints[i][:, 0]-projection_centers[i][0]),2)+pow((projection_allpoints[i][:, 1]-projection_centers[i][1]),2)
         Distance=pow(Distance_square,0.5)
         Label_minidx.append(np.argsort(Distance)[0:N_return_clusters])
-    file_clus = open("./AlleyCat-Ca-unconstrained/nearest_clusters.dat",'w')
+    file_clus = open("./AlleyCat-Ca-constrained/nearest_clusters.dat",'w')
     for i in range(0,N_cluster_opt):
         A=np.sort(Label_minidx[i])
         B=np.argsort(Label_minidx[i])
@@ -239,7 +242,7 @@ def main():
     se = ['gray', 'darksalmon', 'tan', 'palegreen', 'deepskyblue', 'plum', 'lemonchiffon', 'thistle',
           'lightpink','green']
     for i in range(0, N_cluster_opt):
-        plt.scatter(projection_allpoints[i][:, 0], projection_allpoints[i][:, 1], marker='s', c=se[i])
+        plt.scatter(projection_allpoints[i][:, 0], projection_allpoints[i][:, 1], marker='s', c=se[i % len(se)])
         #plt.scatter(projection_allpoints[i][Label_minidx[i], 0], projection_allpoints[i][Label_minidx[i], 1], marker='^', c='r')
     plt.scatter(projection_centers[:, 0], projection_centers[:, 1], marker='o', c='r')
     plt.scatter(projection_ave[:, 0], projection_ave[:, 1], marker='x', c='k')
@@ -248,7 +251,7 @@ def main():
     plt.title('Pairwise distance PCA: AlleyCat')
     # cbar = plt.colorbar()
     # cbar.set_label('Time [ps]')
-    plt.savefig('./AlleyCat-Ca-unconstrained/PCA.pdf', dpi=300)
+    plt.savefig('./AlleyCat-Ca-constrained/PCA.pdf', dpi=300)
     del traj, avg_traj
     rePDB(N_cluster_opt)
 
